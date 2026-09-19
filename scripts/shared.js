@@ -6,13 +6,19 @@ const DEFAULT_PAIR_TOKENS = {
   pons: '0x39dbed3a2bd333467115de45665cc57f813c4571',
   artificialInu: '0x2e8c31162b855a2ffa90f6f8634643ad6f111e18'
 };
+const allowAddressDefaults = process.env.ALLOW_ADDRESS_DEFAULTS === 'true';
 
 function requireEnv(name, fallback) {
-  const value = process.env[name] || fallback;
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
+  const explicitValue = process.env[name];
+  if (explicitValue) {
+    return explicitValue;
   }
-  return value;
+  if (allowAddressDefaults && fallback) {
+    return fallback;
+  }
+  throw new Error(
+    `Missing required environment variable: ${name}. Set ALLOW_ADDRESS_DEFAULTS=true to opt into the documented defaults.`
+  );
 }
 
 function getPairTokens() {

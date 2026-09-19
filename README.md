@@ -89,10 +89,11 @@ Only use environment variables; do not commit private keys or live secrets.
 - `BLOCKSCOUT_API_URL` - optional Blockscout API endpoint for verification
 - `BLOCKSCOUT_BROWSER_URL` - optional Blockscout browser base URL for verification
 - `BLOCKSCOUT_API_KEY` - optional verification key placeholder if your Blockscout instance expects one
+- `ALLOW_ADDRESS_DEFAULTS=true` - optional opt-in if you explicitly want the scripts to fall back to the documented Robinhood defaults below
 - `FACTORY_FEE_TO_SETTER` - factory fee setter for `scripts/deployFactory.js`
 - `FACTORY_ADDRESS` - required for router deployment and pair-management scripts
-- `WETH_ADDRESS` - defaults to the Robinhood wrapped ETH address above
-- `ADMIN_WALLET` - defaults to the Robinhood admin wallet above
+- `WETH_ADDRESS` - required unless `ALLOW_ADDRESS_DEFAULTS=true`
+- `ADMIN_WALLET` - required unless `ALLOW_ADDRESS_DEFAULTS=true`
 - `SAITAMA_IN_HOOD_ADDRESS`
 - `CASH_CAT_ADDRESS`
 - `PONS_ADDRESS`

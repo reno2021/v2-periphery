@@ -255,6 +255,7 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
         _collectTokenWithKnownPairAmount(token, pair, amountToken, ACTION_ADD_LIQUIDITY);
 
         uint256 grossETHAmount = RobinhoodDexLibrary.grossUpAmount(amountETH);
+        require(msg.value >= grossETHAmount, 'RobinhoodDexRouter: INSUFFICIENT_ETH_SENT');
         uint256 ethFee = grossETHAmount.sub(amountETH);
         if (ethFee > 0) {
             TransferHelper.safeTransferETH(protocolFeeRecipient, ethFee);
@@ -392,9 +393,12 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
         require(path.length >= 2, 'RobinhoodDexRouter: INVALID_PATH');
     }
 
-    function _validateSupportingFeeOnTransferRecipient(address[] memory path, address to) internal pure {
+    function _validateSupportingFeeOnTransferRecipient(address[] memory path, address to) internal view {
         for (uint256 i; i < path.length; i++) {
             require(to != path[i], 'RobinhoodDexRouter: INVALID_TO');
+        }
+        for (uint256 i; i < path.length - 1; i++) {
+            require(to != RobinhoodDexLibrary.pairFor(factory, path[i], path[i + 1]), 'RobinhoodDexRouter: INVALID_TO');
         }
     }
 
