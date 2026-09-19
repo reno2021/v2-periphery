@@ -172,6 +172,7 @@ describe('RobinhoodDexRouter02', function () {
     const pairInputForExactOut = getAmountInPair(expectedOut, reserveInAfterFirstSwap, reserveOutAfterFirstSwap);
 
     const adminTokenBeforeExactOut = await tokenA.balanceOf(admin.address);
+    const userTokenABeforeExactOut = await tokenA.balanceOf(alice.address);
     const userTokenBBeforeExactOut = await tokenB.balanceOf(alice.address);
     await router
       .connect(alice)
@@ -179,6 +180,7 @@ describe('RobinhoodDexRouter02', function () {
     expect(await tokenA.balanceOf(admin.address) - adminTokenBeforeExactOut).to.equal(
       quotedIn[0] - pairInputForExactOut
     );
+    expect(userTokenABeforeExactOut - (await tokenA.balanceOf(alice.address))).to.equal(quotedIn[0]);
     expect(await tokenB.balanceOf(alice.address) - userTokenBBeforeExactOut).to.equal(expectedOut);
   });
 

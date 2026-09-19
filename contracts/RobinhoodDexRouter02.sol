@@ -130,6 +130,23 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
         }
     }
 
+    function _collectTokenWithSpecifiedGrossAndPairAmount(
+        address token,
+        address pair,
+        uint256 grossAmount,
+        uint256 pairAmount,
+        uint8 actionType
+    ) internal returns (uint256 feeAmount) {
+        feeAmount = grossAmount.sub(pairAmount);
+        if (feeAmount > 0) {
+            TransferHelper.safeTransferFrom(token, msg.sender, protocolFeeRecipient, feeAmount);
+            _emitProtocolFee(msg.sender, token, grossAmount, feeAmount, actionType);
+        }
+        if (pairAmount > 0) {
+            TransferHelper.safeTransferFrom(token, msg.sender, pair, pairAmount);
+        }
+    }
+
     function _collectTokenWithKnownGrossAmount(
         address token,
         address pair,
@@ -438,13 +455,17 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
         uint256 deadline
     ) external override ensure(deadline) returns (uint256[] memory amounts) {
         _validatePathLength(path);
+        amounts = RobinhoodDexLibrary.getAmountsIn(factory, amountOut, path);
         uint256[] memory pairAmounts = RobinhoodDexLibrary.getAmountsInForPairOutput(factory, amountOut, path);
-        uint256 grossAmountIn = RobinhoodDexLibrary.grossUpAmount(pairAmounts[0]);
-        require(grossAmountIn <= amountInMax, 'RobinhoodDexRouter: EXCESSIVE_INPUT_AMOUNT');
-        _collectTokenWithKnownPairAmount(path[0], RobinhoodDexLibrary.pairFor(factory, path[0], path[1]), pairAmounts[0], ACTION_SWAP);
+        require(amounts[0] <= amountInMax, 'RobinhoodDexRouter: EXCESSIVE_INPUT_AMOUNT');
+        _collectTokenWithSpecifiedGrossAndPairAmount(
+            path[0],
+            RobinhoodDexLibrary.pairFor(factory, path[0], path[1]),
+            amounts[0],
+            pairAmounts[0],
+            ACTION_SWAP
+        );
         _swap(pairAmounts, path, to);
-        amounts = pairAmounts;
-        amounts[0] = grossAmountIn;
     }
 
     function swapExactETHForTokens(
@@ -479,15 +500,19 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
     ) external override ensure(deadline) returns (uint256[] memory amounts) {
         _validatePathLength(path);
         require(path[path.length - 1] == WETH, 'RobinhoodDexRouter: INVALID_PATH');
+        amounts = RobinhoodDexLibrary.getAmountsIn(factory, amountOut, path);
         uint256[] memory pairAmounts = RobinhoodDexLibrary.getAmountsInForPairOutput(factory, amountOut, path);
-        uint256 grossAmountIn = RobinhoodDexLibrary.grossUpAmount(pairAmounts[0]);
-        require(grossAmountIn <= amountInMax, 'RobinhoodDexRouter: EXCESSIVE_INPUT_AMOUNT');
-        _collectTokenWithKnownPairAmount(path[0], RobinhoodDexLibrary.pairFor(factory, path[0], path[1]), pairAmounts[0], ACTION_SWAP);
+        require(amounts[0] <= amountInMax, 'RobinhoodDexRouter: EXCESSIVE_INPUT_AMOUNT');
+        _collectTokenWithSpecifiedGrossAndPairAmount(
+            path[0],
+            RobinhoodDexLibrary.pairFor(factory, path[0], path[1]),
+            amounts[0],
+            pairAmounts[0],
+            ACTION_SWAP
+        );
         _swap(pairAmounts, path, address(this));
         IWETH(WETH).withdraw(amountOut);
         TransferHelper.safeTransferETH(to, amountOut);
-        amounts = pairAmounts;
-        amounts[0] = grossAmountIn;
     }
 
     function swapExactTokensForETH(
@@ -518,22 +543,20 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
     ) external payable override ensure(deadline) returns (uint256[] memory amounts) {
         _validatePathLength(path);
         require(path[0] == WETH, 'RobinhoodDexRouter: INVALID_PATH');
+        amounts = RobinhoodDexLibrary.getAmountsIn(factory, amountOut, path);
         uint256[] memory pairAmounts = RobinhoodDexLibrary.getAmountsInForPairOutput(factory, amountOut, path);
-        uint256 grossAmountIn = RobinhoodDexLibrary.grossUpAmount(pairAmounts[0]);
-        require(grossAmountIn <= msg.value, 'RobinhoodDexRouter: EXCESSIVE_INPUT_AMOUNT');
-        uint256 ethFee = grossAmountIn.sub(pairAmounts[0]);
+        require(amounts[0] <= msg.value, 'RobinhoodDexRouter: EXCESSIVE_INPUT_AMOUNT');
+        uint256 ethFee = amounts[0].sub(pairAmounts[0]);
         if (ethFee > 0) {
             TransferHelper.safeTransferETH(protocolFeeRecipient, ethFee);
-            _emitProtocolFee(msg.sender, address(0), grossAmountIn, ethFee, ACTION_SWAP);
+            _emitProtocolFee(msg.sender, address(0), amounts[0], ethFee, ACTION_SWAP);
         }
         IWETH(WETH).deposit{value: pairAmounts[0]}();
         require(IWETH(WETH).transfer(RobinhoodDexLibrary.pairFor(factory, path[0], path[1]), pairAmounts[0]), 'RobinhoodDexRouter: WETH_TRANSFER_FAILED');
         _swap(pairAmounts, path, to);
-        if (msg.value > grossAmountIn) {
-            TransferHelper.safeTransferETH(msg.sender, msg.value.sub(grossAmountIn));
+        if (msg.value > amounts[0]) {
+            TransferHelper.safeTransferETH(msg.sender, msg.value.sub(amounts[0]));
         }
-        amounts = pairAmounts;
-        amounts[0] = grossAmountIn;
     }
 
     function swapExactTokensForTokensSupportingFeeOnTransferTokens(
