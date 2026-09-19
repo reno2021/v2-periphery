@@ -255,7 +255,8 @@ describe('RobinhoodDexRouter02', function () {
       .connect(bob)
       .addLiquidityETH(await tokenA.getAddress(), grossToken, 0, 0, bob.address, deadline, { value: extraEthValue });
     const addReceipt = await addTx.wait();
-    const gasPrice = addReceipt.gasPrice ?? addReceipt.effectiveGasPrice;
+    const addTransaction = await ethers.provider.getTransaction(addReceipt.hash);
+    const gasPrice = addReceipt.gasPrice ?? addReceipt.effectiveGasPrice ?? addTransaction.gasPrice ?? addTransaction.maxFeePerGas;
     const gasCost = addReceipt.gasUsed * gasPrice;
     const bobEthAfter = await ethers.provider.getBalance(bob.address);
     const grossEthUsed = bobEthBefore - bobEthAfter - gasCost;

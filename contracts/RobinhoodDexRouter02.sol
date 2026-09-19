@@ -394,9 +394,6 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
     }
 
     function _validateSupportingFeeOnTransferRecipient(address[] memory path, address to) internal view {
-        for (uint256 i; i < path.length; i++) {
-            require(to != path[i], 'RobinhoodDexRouter: INVALID_TO');
-        }
         for (uint256 i; i < path.length - 1; i++) {
             require(to != RobinhoodDexLibrary.pairFor(factory, path[i], path[i + 1]), 'RobinhoodDexRouter: INVALID_TO');
         }

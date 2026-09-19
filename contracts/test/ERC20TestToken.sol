@@ -11,6 +11,7 @@ contract ERC20TestToken is IERC20 {
     string public symbol;
     uint8 public constant decimals = 18;
     uint256 public override totalSupply;
+    address public immutable owner;
 
     mapping(address => uint256) public override balanceOf;
     mapping(address => mapping(address => uint256)) public override allowance;
@@ -19,6 +20,7 @@ contract ERC20TestToken is IERC20 {
     event Approval(address indexed owner, address indexed spender, uint256 value);
 
     constructor(string memory name_, string memory symbol_, uint256 supply) public {
+        owner = msg.sender;
         name = name_;
         symbol = symbol_;
         _mint(msg.sender, supply);
@@ -45,6 +47,7 @@ contract ERC20TestToken is IERC20 {
     }
 
     function mint(address to, uint256 value) external {
+        require(msg.sender == owner, 'ERC20TestToken: FORBIDDEN');
         _mint(to, value);
     }
 
