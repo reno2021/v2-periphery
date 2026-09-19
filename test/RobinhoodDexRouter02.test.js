@@ -283,4 +283,59 @@ describe('RobinhoodDexRouter02', function () {
     expect(await tokenA.balanceOf(bob.address) - bobTokenBefore).to.equal(expectedTokenToRecipient);
     expect(await ethers.provider.getBalance(bob.address) - bobEthBefore).to.equal(expectedEthToRecipient);
   });
+
+  it('supports fee-on-transfer token swaps and rejects token-contract recipients', async function () {
+    const { admin, alice, deployer, factory, router, tokenB } = await deployFixture();
+    const FeeToken = await ethers.getContractFactory('FeeOnTransferToken');
+    const feeToken = await FeeToken.deploy(
+      'Fee Token',
+      'FEE',
+      ethers.parseEther('1000000'),
+      100,
+      deployer.address
+    );
+    await feeToken.waitForDeployment();
+    await feeToken.connect(deployer).mint(alice.address, ethers.parseEther('10000'));
+    await feeToken.connect(deployer).approve(await router.getAddress(), ethers.MaxUint256);
+    await feeToken.connect(alice).approve(await router.getAddress(), ethers.MaxUint256);
+    await tokenB.connect(deployer).approve(await router.getAddress(), ethers.MaxUint256);
+
+    await factory.createPair(await feeToken.getAddress(), await tokenB.getAddress());
+    const pairAddress = await factory.getPair(await feeToken.getAddress(), await tokenB.getAddress());
+    const pair = await ethers.getContractAt(
+      '@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol:IUniswapV2Pair',
+      pairAddress
+    );
+
+    await feeToken.connect(deployer).transfer(pairAddress, ethers.parseEther('10000'));
+    await tokenB.connect(deployer).transfer(pairAddress, ethers.parseEther('10000'));
+    await pair.connect(deployer).mint(alice.address);
+
+    const deadline = await currentDeadline();
+    const path = [await feeToken.getAddress(), await tokenB.getAddress()];
+    let invalidRecipientReverted = false;
+    try {
+      await router
+        .connect(alice)
+        .swapExactTokensForTokensSupportingFeeOnTransferTokens(
+          ethers.parseEther('10'),
+          1n,
+          path,
+          await feeToken.getAddress(),
+          deadline
+        );
+    } catch (error) {
+      invalidRecipientReverted = String(error).includes('RobinhoodDexRouter: INVALID_TO');
+    }
+    expect(invalidRecipientReverted).to.equal(true);
+
+    const adminBefore = await feeToken.balanceOf(admin.address);
+    const aliceTokenBBefore = await tokenB.balanceOf(alice.address);
+    await router
+      .connect(alice)
+      .swapExactTokensForTokensSupportingFeeOnTransferTokens(ethers.parseEther('10'), 1n, path, alice.address, deadline);
+
+    expect(await feeToken.balanceOf(admin.address) - adminBefore > 0n).to.equal(true);
+    expect(await tokenB.balanceOf(alice.address) - aliceTokenBBefore > 0n).to.equal(true);
+  });
 });

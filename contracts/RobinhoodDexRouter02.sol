@@ -388,6 +388,16 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
         }
     }
 
+    function _validatePathLength(address[] memory path) internal pure {
+        require(path.length >= 2, 'RobinhoodDexRouter: INVALID_PATH');
+    }
+
+    function _validateSupportingFeeOnTransferRecipient(address[] memory path, address to) internal pure {
+        for (uint256 i; i < path.length; i++) {
+            require(to != path[i], 'RobinhoodDexRouter: INVALID_TO');
+        }
+    }
+
     function swapExactTokensForTokens(
         uint256 amountIn,
         uint256 amountOutMin,
@@ -395,7 +405,7 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
         address to,
         uint256 deadline
     ) external override ensure(deadline) returns (uint256[] memory amounts) {
-        require(path.length >= 2, 'RobinhoodDexRouter: INVALID_PATH');
+        _validatePathLength(path);
         uint256 pairAmountIn = RobinhoodDexLibrary.amountAfterProtocolFee(amountIn);
         uint256[] memory pairAmounts = RobinhoodDexLibrary.getAmountsOutFromPairInput(factory, pairAmountIn, path);
         require(pairAmounts[pairAmounts.length - 1] >= amountOutMin, 'RobinhoodDexRouter: INSUFFICIENT_OUTPUT_AMOUNT');
@@ -412,7 +422,7 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
         address to,
         uint256 deadline
     ) external override ensure(deadline) returns (uint256[] memory amounts) {
-        require(path.length >= 2, 'RobinhoodDexRouter: INVALID_PATH');
+        _validatePathLength(path);
         uint256[] memory pairAmounts = RobinhoodDexLibrary.getAmountsInForPairOutput(factory, amountOut, path);
         uint256 grossAmountIn = RobinhoodDexLibrary.grossUpAmount(pairAmounts[0]);
         require(grossAmountIn <= amountInMax, 'RobinhoodDexRouter: EXCESSIVE_INPUT_AMOUNT');
@@ -428,6 +438,7 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
         address to,
         uint256 deadline
     ) external payable override ensure(deadline) returns (uint256[] memory amounts) {
+        _validatePathLength(path);
         require(path[0] == WETH, 'RobinhoodDexRouter: INVALID_PATH');
         uint256 pairAmountIn = RobinhoodDexLibrary.amountAfterProtocolFee(msg.value);
         uint256 ethFee = msg.value.sub(pairAmountIn);
@@ -451,6 +462,7 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
         address to,
         uint256 deadline
     ) external override ensure(deadline) returns (uint256[] memory amounts) {
+        _validatePathLength(path);
         require(path[path.length - 1] == WETH, 'RobinhoodDexRouter: INVALID_PATH');
         uint256[] memory pairAmounts = RobinhoodDexLibrary.getAmountsInForPairOutput(factory, amountOut, path);
         uint256 grossAmountIn = RobinhoodDexLibrary.grossUpAmount(pairAmounts[0]);
@@ -470,6 +482,7 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
         address to,
         uint256 deadline
     ) external override ensure(deadline) returns (uint256[] memory amounts) {
+        _validatePathLength(path);
         require(path[path.length - 1] == WETH, 'RobinhoodDexRouter: INVALID_PATH');
         uint256 pairAmountIn = RobinhoodDexLibrary.amountAfterProtocolFee(amountIn);
         uint256[] memory pairAmounts = RobinhoodDexLibrary.getAmountsOutFromPairInput(factory, pairAmountIn, path);
@@ -488,6 +501,7 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
         address to,
         uint256 deadline
     ) external payable override ensure(deadline) returns (uint256[] memory amounts) {
+        _validatePathLength(path);
         require(path[0] == WETH, 'RobinhoodDexRouter: INVALID_PATH');
         uint256[] memory pairAmounts = RobinhoodDexLibrary.getAmountsInForPairOutput(factory, amountOut, path);
         uint256 grossAmountIn = RobinhoodDexLibrary.grossUpAmount(pairAmounts[0]);
@@ -514,7 +528,8 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
         address to,
         uint256 deadline
     ) external override ensure(deadline) {
-        require(path.length >= 2, 'RobinhoodDexRouter: INVALID_PATH');
+        _validatePathLength(path);
+        _validateSupportingFeeOnTransferRecipient(path, to);
         _collectTokenWithKnownGrossAmount(path[0], RobinhoodDexLibrary.pairFor(factory, path[0], path[1]), amountIn, ACTION_SWAP);
         uint256 balanceBefore = IERC20(path[path.length - 1]).balanceOf(to);
         _swapSupportingFeeOnTransferTokens(path, to);
@@ -530,7 +545,9 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
         address to,
         uint256 deadline
     ) external payable override ensure(deadline) {
+        _validatePathLength(path);
         require(path[0] == WETH, 'RobinhoodDexRouter: INVALID_PATH');
+        _validateSupportingFeeOnTransferRecipient(path, to);
         uint256 pairAmountIn = RobinhoodDexLibrary.amountAfterProtocolFee(msg.value);
         uint256 ethFee = msg.value.sub(pairAmountIn);
         if (ethFee > 0) {
@@ -554,6 +571,7 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
         address to,
         uint256 deadline
     ) external override ensure(deadline) {
+        _validatePathLength(path);
         require(path[path.length - 1] == WETH, 'RobinhoodDexRouter: INVALID_PATH');
         _collectTokenWithKnownGrossAmount(path[0], RobinhoodDexLibrary.pairFor(factory, path[0], path[1]), amountIn, ACTION_SWAP);
         uint256 wethBalanceBefore = IERC20(WETH).balanceOf(address(this));
