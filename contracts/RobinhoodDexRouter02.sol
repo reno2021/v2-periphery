@@ -164,6 +164,27 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
         }
     }
 
+    function _collectSupportingFeeOnTransferInput(
+        address token,
+        address pair,
+        uint256 grossAmount,
+        uint8 actionType
+    ) internal returns (uint256 feeAmount, uint256 amountMovedToPair) {
+        uint256 routerBalanceBefore = IERC20(token).balanceOf(address(this));
+        TransferHelper.safeTransferFrom(token, msg.sender, address(this), grossAmount);
+        uint256 routerBalanceAfter = IERC20(token).balanceOf(address(this));
+        uint256 receivedAmount = routerBalanceAfter.sub(routerBalanceBefore);
+        feeAmount = RobinhoodDexLibrary.protocolFeeAmountFromTotal(receivedAmount);
+        amountMovedToPair = receivedAmount.sub(feeAmount);
+        if (feeAmount > 0) {
+            TransferHelper.safeTransfer(token, protocolFeeRecipient, feeAmount);
+            _emitProtocolFee(msg.sender, token, receivedAmount, feeAmount, actionType);
+        }
+        if (amountMovedToPair > 0) {
+            TransferHelper.safeTransfer(token, pair, amountMovedToPair);
+        }
+    }
+
     function _swap(uint256[] memory amounts, address[] memory path, address _to) internal {
         for (uint256 i; i < path.length - 1; i++) {
             (address input, address output) = (path[i], path[i + 1]);
@@ -426,7 +447,8 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
     function _validateSupportingFeeOnTransferRecipient(address[] memory path, address to) internal view {
         for (uint256 i; i < path.length - 1; i++) {
             address pair = IUniswapV2Factory(factory).getPair(path[i], path[i + 1]);
-            require(pair == address(0) || to != pair, 'RobinhoodDexRouter: INVALID_TO');
+            require(pair != address(0), 'RobinhoodDexRouter: INVALID_PATH');
+            require(to != pair, 'RobinhoodDexRouter: INVALID_TO');
         }
     }
 
@@ -568,7 +590,12 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
     ) external override ensure(deadline) {
         _validatePathLength(path);
         _validateSupportingFeeOnTransferRecipient(path, to);
-        _collectTokenWithKnownGrossAmount(path[0], RobinhoodDexLibrary.pairFor(factory, path[0], path[1]), amountIn, ACTION_SWAP);
+        _collectSupportingFeeOnTransferInput(
+            path[0],
+            RobinhoodDexLibrary.pairFor(factory, path[0], path[1]),
+            amountIn,
+            ACTION_SWAP
+        );
         uint256 balanceBefore = IERC20(path[path.length - 1]).balanceOf(to);
         _swapSupportingFeeOnTransferTokens(path, to);
         require(
@@ -611,7 +638,12 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
     ) external override ensure(deadline) {
         _validatePathLength(path);
         require(path[path.length - 1] == WETH, 'RobinhoodDexRouter: INVALID_PATH');
-        _collectTokenWithKnownGrossAmount(path[0], RobinhoodDexLibrary.pairFor(factory, path[0], path[1]), amountIn, ACTION_SWAP);
+        _collectSupportingFeeOnTransferInput(
+            path[0],
+            RobinhoodDexLibrary.pairFor(factory, path[0], path[1]),
+            amountIn,
+            ACTION_SWAP
+        );
         uint256 wethBalanceBefore = IERC20(WETH).balanceOf(address(this));
         _swapSupportingFeeOnTransferTokens(path, address(this));
         uint256 amountOut = IERC20(WETH).balanceOf(address(this)).sub(wethBalanceBefore);

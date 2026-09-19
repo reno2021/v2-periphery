@@ -43,6 +43,7 @@ Requested WETH pairs:
 - `swapExact*` entry points charge the 1.2% protocol fee from the **user input amount**.
 - `swap*ForExact*` entry points compute the exact pair input needed, then gross it up so the user pays pair input + protocol fee without double-charging.
 - Quote helpers (`getAmountOut`, `getAmountIn`, `getAmountsOut`, `getAmountsIn`) reflect that router-level fee model.
+- For `*SupportingFeeOnTransferTokens` input paths, the router first receives the token, computes the protocol fee from the router-observed receipt amount, then forwards the remainder to the pair. This avoids mis-accounting when the input token itself taxes transfers.
 
 ### Add liquidity
 
