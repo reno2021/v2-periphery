@@ -1,0 +1,24 @@
+{
+  "name": "robinhood-chain-dex-stake-periphery",
+  "version": "0.1.0",
+  "description": "Robinhood Chain Dex & Stake periphery contracts and deployment scripts",
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "clean": "hardhat clean",
+    "compile": "hardhat compile",
+    "test": "hardhat test"
+  },
+  "dependencies": {
+    "@uniswap/v2-core": "1.0.1"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-ethers": "^3.0.8",
+    "@nomicfoundation/hardhat-verify": "^2.0.12",
+    "chai": "^4.5.0",
+    "dotenv": "^16.6.1",
+    "ethers": "^6.15.0",
+    "hardhat": "^2.26.3",
+    "solc-0.5.16": "npm:solc@0.5.16",
+    "solc-0.6.12": "npm:solc@0.6.12"
+  }
+}
