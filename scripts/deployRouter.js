@@ -1,7 +1,8 @@
 const hre = require('hardhat');
-const { DEFAULT_ADMIN_WALLET, DEFAULT_WETH, requireEnv } = require('./shared');
+const { DEFAULT_ADMIN_WALLET, DEFAULT_WETH, requireDeployerKeyForNetwork, requireEnv } = require('./shared');
 
 async function main() {
+  requireDeployerKeyForNetwork(hre);
   const factory = requireEnv('FACTORY_ADDRESS');
   const weth = requireEnv('WETH_ADDRESS', DEFAULT_WETH);
   const adminWallet = requireEnv('ADMIN_WALLET', DEFAULT_ADMIN_WALLET);

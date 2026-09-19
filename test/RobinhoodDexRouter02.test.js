@@ -34,18 +34,6 @@ async function currentDeadline() {
   return BigInt(block.timestamp + 3600);
 }
 
-async function expectSmallEthLiquidityRevert(router, tokenA, signer, deadline) {
-  let reverted = false;
-  try {
-    await router
-      .connect(signer)
-      .addLiquidityETH(await tokenA.getAddress(), 100101n, 0n, 0n, signer.address, deadline, { value: 1001n });
-  } catch (error) {
-    reverted = String(error).includes('RobinhoodDexRouter: INSUFFICIENT_ETH_SENT');
-  }
-  expect(reverted).to.equal(true);
-}
-
 async function deployFixture() {
   const [deployer, admin, alice, bob] = await ethers.getSigners();
   const Factory = await ethers.getContractFactory('UniswapV2Factory');
@@ -227,8 +215,8 @@ describe('RobinhoodDexRouter02', function () {
     expect(await ethers.provider.getBalance(admin.address) - adminEthBefore).to.equal(grossETH - netETH);
   });
 
-  it('refunds excess ETH and rejects ETH liquidity when the fee-adjusted gross amount is not fully funded', async function () {
-    const { admin, alice, bob, router, tokenA } = await deployFixture();
+  it('refunds excess ETH and scales token usage to the chosen ETH gross budget', async function () {
+    const { admin, alice, bob, factory, router, tokenA, weth } = await deployFixture();
     const deadline = await currentDeadline();
     const initialGrossToken = ethers.parseEther('1000');
     const initialGrossETH = ethers.parseEther('10');
@@ -267,7 +255,28 @@ describe('RobinhoodDexRouter02', function () {
     expect(grossEthUsed).to.equal(expectedGrossEthUsed);
     expect(await ethers.provider.getBalance(admin.address) - adminEthBefore).to.equal(feeFromGross(expectedGrossEthUsed));
 
-    await expectSmallEthLiquidityRevert(router, tokenA, bob, deadline);
+    const pairAddress = await factory.getPair(await tokenA.getAddress(), await weth.getAddress());
+    const pair = await ethers.getContractAt(
+      '@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol:IUniswapV2Pair',
+      pairAddress
+    );
+    const reserves = await pair.getReserves();
+    const token0 = (await tokenA.getAddress()).toLowerCase() < (await weth.getAddress()).toLowerCase();
+    const reserveToken = token0 ? reserves[0] : reserves[1];
+    const reserveWeth = token0 ? reserves[1] : reserves[0];
+    const constrainedGrossETH = ethers.parseEther('1');
+    const expectedGrossTokenUsed = (constrainedGrossETH * reserveToken) / reserveWeth;
+    const adminTokenBefore = await tokenA.balanceOf(admin.address);
+    const bobTokenBefore = await tokenA.balanceOf(bob.address);
+
+    await router
+      .connect(bob)
+      .addLiquidityETH(await tokenA.getAddress(), ethers.parseEther('200'), 0, 0, bob.address, deadline, {
+        value: constrainedGrossETH
+      });
+
+    expect(bobTokenBefore - (await tokenA.balanceOf(bob.address))).to.equal(expectedGrossTokenUsed);
+    expect(await tokenA.balanceOf(admin.address) - adminTokenBefore).to.equal(feeFromGross(expectedGrossTokenUsed));
   });
 
   it('charges token and ETH fees when removing token/WETH liquidity', async function () {

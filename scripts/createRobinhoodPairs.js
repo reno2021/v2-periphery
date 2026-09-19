@@ -1,7 +1,8 @@
 const hre = require('hardhat');
-const { DEFAULT_WETH, getPairTokens, requireEnv } = require('./shared');
+const { DEFAULT_WETH, getPairTokens, requireDeployerKeyForNetwork, requireEnv } = require('./shared');
 
 async function main() {
+  requireDeployerKeyForNetwork(hre);
   const factoryAddress = requireEnv('FACTORY_ADDRESS');
   const wethAddress = requireEnv('WETH_ADDRESS', DEFAULT_WETH);
   const Factory = await hre.ethers.getContractFactory('UniswapV2Factory');

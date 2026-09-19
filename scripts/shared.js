@@ -30,10 +30,17 @@ function getPairTokens() {
   };
 }
 
+function requireDeployerKeyForNetwork(hre) {
+  if (hre.network.name === 'robinhood' && !process.env.DEPLOYER_PRIVATE_KEY) {
+    throw new Error('DEPLOYER_PRIVATE_KEY is required for robinhood network runs.');
+  }
+}
+
 module.exports = {
   DEFAULT_ADMIN_WALLET,
   DEFAULT_WETH,
   DEFAULT_PAIR_TOKENS,
   getPairTokens,
+  requireDeployerKeyForNetwork,
   requireEnv
 };

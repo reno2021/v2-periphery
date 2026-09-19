@@ -67,32 +67,44 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
         }
     }
 
-    function _addLiquidity(
+    function _selectLiquidityGrossAmounts(
         address tokenA,
         address tokenB,
         uint256 amountADesired,
         uint256 amountBDesired,
         uint256 amountAMin,
         uint256 amountBMin
-    ) internal returns (uint256 amountA, uint256 amountB) {
+    ) internal returns (uint256 grossAmountA, uint256 grossAmountB) {
         _createPairIfNeeded(tokenA, tokenB);
         (uint256 reserveA, uint256 reserveB) = RobinhoodDexLibrary.getReserves(factory, tokenA, tokenB);
         if (reserveA == 0 && reserveB == 0) {
-            (amountA, amountB) = (amountADesired, amountBDesired);
+            (grossAmountA, grossAmountB) = (amountADesired, amountBDesired);
         } else {
             uint256 amountBOptimal = RobinhoodDexLibrary.quote(amountADesired, reserveA, reserveB);
             if (amountBOptimal <= amountBDesired) {
-                require(amountBOptimal >= amountBMin, 'RobinhoodDexRouter: INSUFFICIENT_B_AMOUNT');
-                (amountA, amountB) = (amountADesired, amountBOptimal);
+                require(
+                    RobinhoodDexLibrary.amountAfterProtocolFee(amountBOptimal) >= amountBMin,
+                    'RobinhoodDexRouter: INSUFFICIENT_B_AMOUNT'
+                );
+                (grossAmountA, grossAmountB) = (amountADesired, amountBOptimal);
             } else {
                 uint256 amountAOptimal = RobinhoodDexLibrary.quote(amountBDesired, reserveB, reserveA);
                 require(amountAOptimal <= amountADesired, 'RobinhoodDexRouter: EXCESSIVE_A_AMOUNT');
-                require(amountAOptimal >= amountAMin, 'RobinhoodDexRouter: INSUFFICIENT_A_AMOUNT');
-                (amountA, amountB) = (amountAOptimal, amountBDesired);
+                require(
+                    RobinhoodDexLibrary.amountAfterProtocolFee(amountAOptimal) >= amountAMin,
+                    'RobinhoodDexRouter: INSUFFICIENT_A_AMOUNT'
+                );
+                (grossAmountA, grossAmountB) = (amountAOptimal, amountBDesired);
             }
         }
-        require(amountA >= amountAMin, 'RobinhoodDexRouter: INSUFFICIENT_A_AMOUNT');
-        require(amountB >= amountBMin, 'RobinhoodDexRouter: INSUFFICIENT_B_AMOUNT');
+        require(
+            RobinhoodDexLibrary.amountAfterProtocolFee(grossAmountA) >= amountAMin,
+            'RobinhoodDexRouter: INSUFFICIENT_A_AMOUNT'
+        );
+        require(
+            RobinhoodDexLibrary.amountAfterProtocolFee(grossAmountB) >= amountBMin,
+            'RobinhoodDexRouter: INSUFFICIENT_B_AMOUNT'
+        );
     }
 
     function _emitProtocolFee(address payer, address feeToken, uint256 grossAmount, uint256 feeAmount, uint8 actionType) internal {
@@ -212,15 +224,17 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
         (grossAmountA, grossAmountB) = _burnPairToRouter(pair, tokenA, tokenB);
     }
 
-    function _collectAddLiquidityTokens(
+    function _collectAddLiquidityAndMint(
         address tokenA,
         address tokenB,
-        uint256 amountA,
-        uint256 amountB
-    ) internal returns (address pair) {
-        pair = RobinhoodDexLibrary.pairFor(factory, tokenA, tokenB);
-        _collectTokenWithKnownPairAmount(tokenA, pair, amountA, ACTION_ADD_LIQUIDITY);
-        _collectTokenWithKnownPairAmount(tokenB, pair, amountB, ACTION_ADD_LIQUIDITY);
+        uint256 grossAmountA,
+        uint256 grossAmountB,
+        address to
+    ) internal returns (uint256 liquidity) {
+        address pair = RobinhoodDexLibrary.pairFor(factory, tokenA, tokenB);
+        _collectTokenWithKnownGrossAmount(tokenA, pair, grossAmountA, ACTION_ADD_LIQUIDITY);
+        _collectTokenWithKnownGrossAmount(tokenB, pair, grossAmountB, ACTION_ADD_LIQUIDITY);
+        liquidity = IUniswapV2Pair(pair).mint(to);
     }
 
     function addLiquidity(
@@ -233,11 +247,11 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
         address to,
         uint256 deadline
     ) external override ensure(deadline) returns (uint256 amountA, uint256 amountB, uint256 liquidity) {
-        uint256 netDesiredA = RobinhoodDexLibrary.amountAfterProtocolFee(amountADesired);
-        uint256 netDesiredB = RobinhoodDexLibrary.amountAfterProtocolFee(amountBDesired);
-        (amountA, amountB) = _addLiquidity(tokenA, tokenB, netDesiredA, netDesiredB, amountAMin, amountBMin);
-        address pair = _collectAddLiquidityTokens(tokenA, tokenB, amountA, amountB);
-        liquidity = IUniswapV2Pair(pair).mint(to);
+        (uint256 grossAmountA, uint256 grossAmountB) =
+            _selectLiquidityGrossAmounts(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin);
+        amountA = RobinhoodDexLibrary.amountAfterProtocolFee(grossAmountA);
+        amountB = RobinhoodDexLibrary.amountAfterProtocolFee(grossAmountB);
+        liquidity = _collectAddLiquidityAndMint(tokenA, tokenB, grossAmountA, grossAmountB, to);
     }
 
     function addLiquidityETH(
@@ -248,13 +262,12 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
         address to,
         uint256 deadline
     ) external payable override ensure(deadline) returns (uint256 amountToken, uint256 amountETH, uint256 liquidity) {
-        uint256 netTokenDesired = RobinhoodDexLibrary.amountAfterProtocolFee(amountTokenDesired);
-        uint256 netEthDesired = RobinhoodDexLibrary.amountAfterProtocolFee(msg.value);
-        (amountToken, amountETH) = _addLiquidity(token, WETH, netTokenDesired, netEthDesired, amountTokenMin, amountETHMin);
+        (uint256 grossTokenAmount, uint256 grossETHAmount) =
+            _selectLiquidityGrossAmounts(token, WETH, amountTokenDesired, msg.value, amountTokenMin, amountETHMin);
+        amountToken = RobinhoodDexLibrary.amountAfterProtocolFee(grossTokenAmount);
+        amountETH = RobinhoodDexLibrary.amountAfterProtocolFee(grossETHAmount);
         address pair = RobinhoodDexLibrary.pairFor(factory, token, WETH);
-        _collectTokenWithKnownPairAmount(token, pair, amountToken, ACTION_ADD_LIQUIDITY);
-
-        uint256 grossETHAmount = RobinhoodDexLibrary.grossUpAmount(amountETH);
+        _collectTokenWithKnownGrossAmount(token, pair, grossTokenAmount, ACTION_ADD_LIQUIDITY);
         require(msg.value >= grossETHAmount, 'RobinhoodDexRouter: INSUFFICIENT_ETH_SENT');
         uint256 ethFee = grossETHAmount.sub(amountETH);
         if (ethFee > 0) {
@@ -395,7 +408,8 @@ contract RobinhoodDexRouter02 is IUniswapV2Router02 {
 
     function _validateSupportingFeeOnTransferRecipient(address[] memory path, address to) internal view {
         for (uint256 i; i < path.length - 1; i++) {
-            require(to != RobinhoodDexLibrary.pairFor(factory, path[i], path[i + 1]), 'RobinhoodDexRouter: INVALID_TO');
+            address pair = IUniswapV2Factory(factory).getPair(path[i], path[i + 1]);
+            require(pair == address(0) || to != pair, 'RobinhoodDexRouter: INVALID_TO');
         }
     }
 
